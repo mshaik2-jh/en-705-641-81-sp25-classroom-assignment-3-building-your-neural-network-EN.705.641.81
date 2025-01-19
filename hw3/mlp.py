@@ -11,7 +11,6 @@ from tqdm import tqdm  # progress bar
 from datasets import load_dataset
 from torch.utils.data import DataLoader, TensorDataset
 from typing import List, Tuple, Dict, Union
-from easydict import EasyDict
 
 # set random seeds
 random.seed(42)
@@ -28,7 +27,7 @@ Data Loading and Splits
 """
 
 
-def load_data() -> Tuple[
+def load_data_mlp() -> Tuple[
     Dict[str, List[Union[int, str]]], Dict[str, List[Union[int, str]]], Dict[str, List[Union[int, str]]]]:
     # download dataset
     print(f"{'-' * 10} Load Dataset {'-' * 10}")
@@ -68,11 +67,15 @@ def featurize(sentence: str, embeddings: gensim.models.keyedvectors.KeyedVectors
         except KeyError:
             pass
 
-    # TODO: complete the function to compute the average embedding of the sentence
+    # TODO (Copy from your HW1): complete the function to compute the average embedding of the sentence
     # your return should be
     # None - if the vector sequence is empty, i.e. the sentence is empty or None of the words in the sentence is in the embedding vocabulary
     # A torch tensor of shape (embed_dim,) - the average word embedding of the sentence
     # Hint: follow the hints in the pdf description
+    if len(vectors) == 0:
+        return None
+    else:
+        return torch.from_numpy(np.mean(vectors, axis=0))
 
 
 def create_tensor_dataset(raw_data: Dict[str, List[Union[int, str]]],
@@ -80,9 +83,12 @@ def create_tensor_dataset(raw_data: Dict[str, List[Union[int, str]]],
     all_features, all_labels = [], []
     for text, label in tqdm(zip(raw_data['text'], raw_data['label'])):
 
-        # TODO: complete the for loop to featurize each sentence
+        # TODO (Copy from your HW1): complete the for loop to featurize each sentence
         # only add the feature and label to the list if the feature is not None
-
+        feature = featurize(text, embeddings)
+        if feature is not None:
+            all_features.append(feature)
+            all_labels.append(label)
         # your code ends here
 
     # stack all features and labels into two single tensors and create a TensorDataset
@@ -107,22 +113,43 @@ Defining our First PyTorch Model
 
 
 class SentimentClassifier(nn.Module):
-    def __init__(self, embed_dim, num_classes):
+    def __init__(self, embed_dim: int, num_classes: int, hidden_dims: List[int]):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_classes = num_classes
 
-        # TODO: define the linear layer
-        # Hint: follow the hints in the pdf description
+        # activation function
+        self.activation = nn.Sigmoid()
 
+        # linear layers for the MLP
+        self.linears = nn.ModuleList()
+        # TODO: define the MLP given the hidden dimensions
+        # - embed_dim is the dimension of the word embeddings (input to the MLP)
+        # - num_classes is the number of classes (output of the MLP)
+        # - hidden_dims is a list of integers, where each integer is the dimension of a hidden layer in the MLP
+        # - The linear layers should have the following dimensions:
+        #       [embed_dim, hidden_dims[0]], [hidden_dims[0], hidden_dims[1]], ..., [hidden_dims[-1], num_classes]
+        # Hint:
+        # - Remember to consider the case when there are no hidden layers (i.e. hidden_dims is an empty list)
+        #       in this case, it essentially degrades to the architecture we used in hw 1
+        if len(hidden_dims) == 0:
+            self.linears.append(nn.Linear(self.embed_dim, self.num_classes))
+        else:
+            self.linears.append(nn.Linear(self.embed_dim, hidden_dims[0]))
+            for i in range(1, len(hidden_dims)):
+                self.linears.append(nn.Linear(hidden_dims[i - 1], hidden_dims[i]))
+            self.linears.append(nn.Linear(hidden_dims[-1], self.num_classes))
         # your code ends here
 
         self.loss = nn.CrossEntropyLoss(reduction='mean')
 
     def forward(self, inp):
-        # TODO: complete the forward function
-        # Hint: follow the hints in the pdf description
 
+        # TODO: complete the forward function
+        # Hint remember to apply the activation function to all hidden layers except the last one
+        for linear in self.linears[:-1]:
+            inp = self.activation(linear(inp))
+        logits = self.linears[-1](inp)
         # your code ends here
 
         return logits
@@ -135,12 +162,12 @@ Chain Everything Together: Training and Evaluation
 
 def accuracy(logits: torch.FloatTensor, labels: torch.LongTensor) -> torch.FloatTensor:
     assert logits.shape[0] == labels.shape[0]
-    # TODO: complete the function to compute the accuracy
+    # TODO (Copy from your HW1): complete the function to compute the accuracy
     # Hint: follow the hints in the pdf description, the return should be a tensor of 0s and 1s with the same shape as labels
     # labels is a tensor of shape (batch_size,)
     # logits is a tensor of shape (batch_size, num_classes)
-
-    return ...
+    preds = torch.argmax(logits, dim=1)
+    return (preds == labels).float()
 
 
 def evaluate(model: SentimentClassifier, eval_dataloader: DataLoader) -> Tuple[float, float]:
@@ -237,15 +264,13 @@ def visualize_configs(all_config_epoch_stats: List[List[float]], config_names: L
     plt.savefig(save_fig_path)
 
 
-def run(config: easydict.EasyDict,
-        dev_data: Dict[str, List[Union[int, str]]],
-        train_data: Dict[str, List[Union[int, str]]],
-        test_data: Dict[str, List[Union[int, str]]]):
+def run_mlp(config: easydict.EasyDict,
+            embeddings: gensim.models.keyedvectors.KeyedVectors,
+            dev_data: Dict[str, List[Union[int, str]]],
+            train_data: Dict[str, List[Union[int, str]]],
+            test_data: Dict[str, List[Union[int, str]]]):
     # download and load embeddings
     # it might take a few minutes
-    print(f"{'-' * 10} Load Pre-trained Embeddings: {config.embeddings} {'-' * 10}")
-    embeddings = gensim.downloader.load(config.embeddings)
-
     # create datasets
     print(f"{'-' * 10} Create Datasets {'-' * 10}")
     train_dataset = create_tensor_dataset(train_data, embeddings)
@@ -258,7 +283,7 @@ def run(config: easydict.EasyDict,
     test_dataloader = create_dataloader(test_dataset, config.batch_size, shuffle=False)
 
     print(f"{'-' * 10} Load Model {'-' * 10}")
-    model = SentimentClassifier(embeddings.vector_size, config.num_classes)
+    model = SentimentClassifier(embeddings.vector_size, config.num_classes, config.hidden_dims)
     # define optimizer that manages the model's parameters and gradient updates
     # we will learn more about optimizers in future lectures and homework
     optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)
