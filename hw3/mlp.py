@@ -113,13 +113,20 @@ Defining our First PyTorch Model
 
 
 class SentimentClassifier(nn.Module):
-    def __init__(self, embed_dim: int, num_classes: int, hidden_dims: List[int]):
+    def __init__(self, embed_dim: int, num_classes: int, hidden_dims: List[int], activation: str = 'sigmoid'):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_classes = num_classes
 
         # activation function
-        self.activation = nn.Sigmoid()
+        # TODO: Madihah - Part 2, define different activation functions given input activation type
+        if activation == 'sigmoid':
+            self.activation = nn.Sigmoid()
+        elif activation == 'tanh':
+            self.activation = nn.Tanh()
+        elif activation == 'relu':
+            self.activation = nn.ReLU()
+
 
         # linear layers for the MLP
         self.linears = nn.ModuleList()
@@ -241,13 +248,14 @@ def train(model: SentimentClassifier,
     return all_epoch_train_losses, all_epoch_train_accs, all_epoch_dev_losses, all_epoch_dev_accs
 
 
-def visualize_epochs(epoch_train_losses: List[float], epoch_dev_losses: List[float], save_fig_path: str):
+def visualize_epochs(epoch_train_losses: List[float], epoch_dev_losses: List[float], save_fig_path: str, name: str):
     plt.clf()
     plt.plot(epoch_train_losses, label='train')
     plt.plot(epoch_dev_losses, label='dev')
     plt.xticks(np.arange(0, len(epoch_train_losses)).astype(np.int32)),
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
+    plt.title(name)
     plt.legend()
     plt.savefig(save_fig_path)
 
@@ -283,7 +291,11 @@ def run_mlp(config: easydict.EasyDict,
     test_dataloader = create_dataloader(test_dataset, config.batch_size, shuffle=False)
 
     print(f"{'-' * 10} Load Model {'-' * 10}")
-    model = SentimentClassifier(embeddings.vector_size, config.num_classes, config.hidden_dims)
+    if 'activation' in config:
+        model = SentimentClassifier(embeddings.vector_size, config.num_classes, config.hidden_dims, config.activation)
+    else:
+        model = SentimentClassifier(embeddings.vector_size, config.num_classes, config.hidden_dims)
+
     # define optimizer that manages the model's parameters and gradient updates
     # we will learn more about optimizers in future lectures and homework
     optimizer = torch.optim.Adam(model.parameters(), lr=config.lr)

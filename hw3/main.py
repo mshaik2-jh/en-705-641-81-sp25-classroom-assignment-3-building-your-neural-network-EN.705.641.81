@@ -6,8 +6,13 @@ from typing import List, Tuple, Dict, Union
 
 EMBEDDING_TYPES = ["glove-twitter-50", "glove-twitter-100", "glove-twitter-200", "word2vec-google-news-300"]
 HIDDEN_DIMS = [[], [512], [512, 512], [512, 512, 512]]
-HIDDEN_DIMS_NAMES = ["None", "512", "512 -> 512", "512 -> 512 -> 512"]
-LEARING_RATES = [0.025, 0.02, 0.01, 0.001]
+HIDDEN_DIMS_NAMES = ["None", "512", "512to512", "512to512to512"]
+LEARNING_RATES = [0.025, 0.02, 0.01, 0.001]
+
+ACTIVATIONS = ['sigmoid', 'relu', 'tanh']
+# HIDDEN_DIMS_SMALL = [[512]]
+# HIDDEN_DIMS_NAMES_SMALL = ["512"]
+
 
 
 def single_run_mlp_lm(train_d, dev_d):
@@ -29,8 +34,8 @@ def single_run_mlp_lm(train_d, dev_d):
     })
 
     epoch_train_losses, epoch_train_ppls, epoch_dev_losses, epoch_dev_ppls = run_mlp_lm(train_config, train_d, dev_d)
-    visualize_epochs(epoch_train_losses, epoch_dev_losses, "Loss", "mlp_lm_loss.png")
-    visualize_epochs(epoch_train_ppls, epoch_dev_ppls, "Perplexity", "mlp_lm_ppl.png")
+    visualize_epochs(epoch_train_losses, epoch_dev_losses, "Loss", "mlp_lm_loss.png", '512')
+    visualize_epochs(epoch_train_ppls, epoch_dev_ppls, "Perplexity", "mlp_lm_ppl.png", '512')
 
 
 def sample_from_trained_mlp_lm(dev_d):
@@ -56,7 +61,7 @@ def explore_mlp_structures(dev_d: Dict[str, List[Union[str, int]]],
     print(f"{'-' * 10} Load Pre-trained Embeddings: {EMBEDDING_TYPES[0]} {'-' * 10}")
     embeddings = gensim.downloader.load(EMBEDDING_TYPES[0])
 
-    for hidden_dims, hidden_dim_names, lr in zip(HIDDEN_DIMS, HIDDEN_DIMS_NAMES, LEARING_RATES):
+    for hidden_dims, hidden_dim_names, lr in zip(HIDDEN_DIMS, HIDDEN_DIMS_NAMES, LEARNING_RATES):
         train_config = EasyDict({
             'batch_size': 64,  # we use batching for
             'lr': lr,  # if embedding_type != "None" else 0.01,  # learning rate
@@ -71,10 +76,70 @@ def explore_mlp_structures(dev_d: Dict[str, List[Union[str, int]]],
                                                                               test_d)
         all_emb_epoch_dev_accs.append(epoch_dev_accs)
         all_emb_epoch_dev_losses.append(epoch_dev_loss)
-        visualize_epochs(epoch_train_losses, epoch_dev_loss, "Loss", f"mlp_{hidden_dim_names}_loss.png")
+        visualize_epochs(epoch_train_losses, epoch_dev_loss, "Loss", f"mlp_{hidden_dim_names}_loss.png", hidden_dim_names)
 
     visualize_configs(all_emb_epoch_dev_accs, HIDDEN_DIMS_NAMES, "Accuracy", "./all_mlp_acc.png")
     visualize_configs(all_emb_epoch_dev_losses, HIDDEN_DIMS_NAMES, "Loss", "./all_mlp_loss.png")
+
+
+# TODO: MADIHAH Q2 FUNCTION
+def explore_mlp_activations(dev_d: Dict[str, List[Union[str, int]]],
+                           train_d: Dict[str, List[Union[str, int]]],
+                           test_d: Dict[str, List[Union[str, int]]]):
+    all_emb_epoch_dev_accs, all_emb_epoch_dev_losses = [], []
+
+    print(f"{'-' * 10} Load Pre-trained Embeddings: {EMBEDDING_TYPES[0]} {'-' * 10}")
+    embeddings = gensim.downloader.load(EMBEDDING_TYPES[0])
+
+
+    for activation in ACTIVATIONS:
+        train_config = EasyDict({
+            'batch_size': 64,  # we use batching for
+            'lr': LEARNING_RATES[0],  # if embedding_type != "None" else 0.01,  # learning rate
+            'num_epochs': 20,  # the total number of times all the training data is iterated over
+            'hidden_dims': [512],
+            'activation': activation,
+            'save_path': f'model_hidden_512_q2.pth',  # path where to save the model
+            'embeddings': EMBEDDING_TYPES[0],
+            'num_classes': 2,
+        })
+
+        epoch_train_losses, _, epoch_dev_loss, epoch_dev_accs, _, _ = run_mlp(train_config, embeddings, dev_d, train_d,
+                                                                              test_d)
+        all_emb_epoch_dev_accs.append(epoch_dev_accs)
+        all_emb_epoch_dev_losses.append(epoch_dev_loss)
+
+    visualize_configs(all_emb_epoch_dev_accs, ACTIVATIONS, "Accuracy", "./all_mlp_acc.png")
+    visualize_configs(all_emb_epoch_dev_losses, ACTIVATIONS, "Loss", "./all_mlp_loss.png")
+
+# TODO: MADIHAH Q3
+def explore_mlp_learning_rates(dev_d: Dict[str, List[Union[str, int]]],
+                           train_d: Dict[str, List[Union[str, int]]],
+                           test_d: Dict[str, List[Union[str, int]]]):
+    all_emb_epoch_dev_accs, all_emb_epoch_dev_losses = [], []
+
+    print(f"{'-' * 10} Load Pre-trained Embeddings: {EMBEDDING_TYPES[0]} {'-' * 10}")
+    embeddings = gensim.downloader.load(EMBEDDING_TYPES[0])
+
+
+    for lr in LEARNING_RATES:
+        train_config = EasyDict({
+            'batch_size': 64,  # we use batching for
+            'lr': lr,  # if embedding_type != "None" else 0.01,  # learning rate
+            'num_epochs': 20,  # the total number of times all the training data is iterated over
+            'hidden_dims': [512],
+            'save_path': f'model_hidden_512_q3.pth',  # path where to save the model
+            'embeddings': EMBEDDING_TYPES[0],
+            'num_classes': 2,
+        })
+
+        epoch_train_losses, _, epoch_dev_loss, epoch_dev_accs, _, _ = run_mlp(train_config, embeddings, dev_d, train_d,
+                                                                              test_d)
+        all_emb_epoch_dev_accs.append(epoch_dev_accs)
+        all_emb_epoch_dev_losses.append(epoch_dev_loss)
+
+    visualize_configs(all_emb_epoch_dev_accs, LEARNING_RATES, "Accuracy", "./all_mlp_acc.png")
+    visualize_configs(all_emb_epoch_dev_losses, LEARNING_RATES, "Loss", "./all_mlp_loss.png")
 
 
 if __name__ == '__main__':
@@ -84,7 +149,9 @@ if __name__ == '__main__':
 
     # Explore different hidden dimensions
     # uncomment the following line to run
-    explore_mlp_structures(dev_data, train_data, test_data)
+    # explore_mlp_structures(dev_data, train_data, test_data)
+    # explore_mlp_activations(dev_data, train_data, test_data)
+    explore_mlp_learning_rates(dev_data, train_data, test_data)
 
     # load raw data for lm
     # uncomment the following line to run

@@ -297,13 +297,14 @@ def generate_text(prompt, model, tokenizer, local_window_size, top_p, max_len=30
     print(f"Generated text: {generation}")
 
 
-def visualize_epochs(epoch_train_stats: List[float], epoch_dev_stats: List[float], stat_name: str, save_fig_path: str):
+def visualize_epochs(epoch_train_stats: List[float], epoch_dev_stats: List[float], stat_name: str, save_fig_path: str, name:str):
     plt.clf()
     plt.plot(epoch_train_stats, label='train')
     plt.plot(epoch_dev_stats, label='dev')
     plt.xticks(np.arange(0, len(epoch_train_stats)).astype(np.int32)),
     plt.xlabel('Epochs')
     plt.ylabel(f'{stat_name}')
+    plt.title(name)
     plt.legend()
     plt.savefig(save_fig_path)
 
